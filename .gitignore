@@ -1,0 +1,13 @@
+# Local / throwaway
+scratch/
+vendor/
+*.tgz
+*.tar.gz
+.DS_Store
+
+# Editor
+.vscode/*.log
+*.swp
+
+# Companion exports may contain seat-specific paths — keep curated copies only
+companion-exports/*.local.json
