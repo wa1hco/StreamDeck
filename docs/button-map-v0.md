@@ -23,15 +23,40 @@ No CW mode button. KEY path is separate.
 
 | Dial | Role | Rotate | Press |
 |------|------|--------|-------|
-| 0 (left) | **Upper Az** | Adjust `custom:upper_az_target` (wrap 0–359) | Point upper rotator to target |
-| 1 | **Lower Az** | Adjust `custom:lower_az_target` (wrap 0–359) | Point lower rotator to target |
+| 0 (left) | **Upper Az** | Adjust `custom:upper_tgt` (wrap 0–359, accelerated) | Point upper rotator to target |
+| 1 | **Lower Az** | Adjust `custom:lower_tgt` (wrap 0–359, accelerated) | Point lower rotator to target |
 | 2 | (unassigned) | — | — |
 | 3 | (unassigned) | — | — |
 
 - Rotating only sets a target; nothing moves until press.
-- Step size: 1° per detent (coarse 10° step TBD).
+- Step size: **velocity-accelerated** (see below); 1° per detent when turned deliberately.
 - Backend: WIMS rotator point with explicit rotator + az (API shape to confirm with WIMS).
 - **Interim backend (now):** `scripts/rotator_sim.py` on `http://127.0.0.1:8790` (6°/s). It pushes `upper_az/_moving/_dir` and `lower_*` into Companion custom vars and points when a dial press bumps `<rot>_point_seq` (with `<rot>_point_az`). Wiring: `scripts/wire_rotator_knobs.py`.
+
+### Knob acceleration (dials 0/1)
+
+Time-between-detents multiplier — the scheme used by mathertel/RotaryEncoder's
+`AcceleratedRotator`, FlexControl/VFO knobs and libinput's tracker (velocity from
+inter-event time, reset on direction change or pause). Companion ignores the
+encoder's own velocity, so it is computed in expressions from `unixNow()` (ms).
+
+| Interval since last detent | Step per detent |
+|----------------------------|-----------------|
+| ≥ 200 ms (deliberate) | 1° |
+| < 200 ms | 2° |
+| < 120 ms | 5° |
+| < 70 ms | 10° |
+| < 35 ms | 15° |
+
+- **Attack is instant** (a fast interval jumps straight to its tier); **release decays**: when the
+  knob slows, step = max(new tier, previous step ÷ 2), so 10 → 5 → 2 → 1 over a few detents.
+- **Pause > 250 ms** or **direction reversal** → back to 1° on that detent.
+- Per-dial state vars: `<rot>_last_ms`, `<rot>_last_dir` (±1), `<rot>_step`. Action order in each
+  rotate set is fixed: `step` → `tgt` → `edit_until` → `last_ms` → `last_dir`.
+- Tune the constants at the top of `scripts/wire_rotator_knobs.py` (`ACCEL_TIERS`, `STEP_SLOW`,
+  `IDLE_RESET_MS`, `DECAY_DIV`) and re-run it (after `demo_paint_buttons.py`). Test without the deck:
+  `python3 scripts/test_knob_accel.py [dial]`.
+- Edit window (5 s), wrap and strip behavior are unchanged.
 
 ## Touch strip (per dial region)
 

@@ -14,6 +14,21 @@ import demo_paint_buttons as d  # noqa: E402
 from demo_paint_buttons import ev, mut, control_id_at, new_button  # noqa: E402
 
 EDIT_S = 5
+
+# ---- Knob acceleration (tune on the deck; re-run this script after editing) ----
+# Velocity = time since the previous detent, from Companion's ms clock unixNow().
+# Tiers are (max_interval_ms, step_deg): first row whose interval is BELOW max_interval_ms wins.
+# Slower than the last row => STEP_SLOW. Attack is instant; release decays (see DECAY_DIV).
+ACCEL_TIERS = (
+    (35, 15),   # < 35 ms/detent  : very fast spin
+    (70, 10),   # < 70 ms
+    (120, 5),   # < 120 ms        : brisk
+    (200, 2),   # < 200 ms        : a little quicker than deliberate
+)
+STEP_SLOW = 1        # deg/detent for deliberate turns (>= last tier threshold)
+IDLE_RESET_MS = 250  # pause longer than this => step snaps back to STEP_SLOW
+DECAY_DIV = 2        # when the knob slows, step falls to max(new tier, previous step // DECAY_DIV)
+# Direction reversal always resets the step to STEP_SLOW (libinput/mouse-style tracker reset).
 ROTS = ((0, "upper", "UPR"), (1, "lower", "LWR"))
 AMBER, WHITE, BLACK, GREEN = 0xFFB000, 0xFFFFFF, 0x000000, 0x004400
 
@@ -42,10 +57,26 @@ async def opt(cid, el, key, value, expr=False):
         "controlId": cid, "elementId": el, "key": key, "value": ev(value, expr=expr)})
 
 
+def step_expr(n, sign):
+    """Companion expression: new step (deg/detent) for this detent. Reads <n>_last_ms,
+    <n>_last_dir, <n>_step (all updated AFTER tgt by the later actions)."""
+    tier = str(STEP_SLOW)
+    for ms, st in reversed(ACCEL_TIERS):
+        tier = f"dt < {ms} ? {st} : {tier}"
+    return (
+        f"dt = unixNow() - $(custom:{n}_last_ms);\n"
+        f"tier = {tier};\n"
+        f"prev = $(custom:{n}_step);\n"
+        f"(dt > {IDLE_RESET_MS} || $(custom:{n}_last_dir) != {sign}) ? {STEP_SLOW}"
+        f" : max(tier, floor(prev / {DECAY_DIV}))"
+    )
+
+
 async def main():
     for _, n, _ in ROTS:
         for suf, dv in (("az", "0"), ("moving", "0"), ("dir", ""), ("tgt", "0"),
-                        ("edit_until", "0"), ("point_az", "0"), ("point_seq", "0")):
+                        ("edit_until", "0"), ("last_ms", "0"), ("last_dir", "0"),
+                        ("step", str(STEP_SLOW)), ("point_az", "0"), ("point_seq", "0")):
             await var(f"{n}_{suf}", dv)
 
     for col, n, lbl in ROTS:
@@ -54,11 +85,16 @@ async def main():
         cid = await new_button(3, col)
         await mut("controls.setOptionsField", {"controlId": cid, "key": "rotaryActions", "value": True})
         await d.style_face(cid, text=f"{lbl} AZ", bgcolor=0x222222, fontsize=d.FONT_KNOB)
-        for set_id, delta in (("rotate_left", "+ 359"), ("rotate_right", "+ 1")):
-            # seed from current az when not editing; wrap 0-359
+        for set_id, sign in (("rotate_left", -1), ("rotate_right", 1)):
+            # ORDER MATTERS (actions in a set run sequentially): step -> tgt -> bookkeeping.
+            await add_action(cid, set_id, f"{n}_step", step_expr(n, sign))
+            # seed from current az when not editing; wrap 0-359; left = + (360 - step)
+            adj = f"$(custom:{n}_step)" if sign > 0 else f"(360 - $(custom:{n}_step))"
             await add_action(cid, set_id, f"{n}_tgt",
-                             f"(({editing} ? $(custom:{n}_tgt) : $(custom:{n}_az)) {delta}) % 360")
+                             f"(({editing} ? $(custom:{n}_tgt) : $(custom:{n}_az)) + {adj}) % 360")
             await add_action(cid, set_id, f"{n}_edit_until", f"$(internal:time_unix) + {EDIT_S}")
+            await add_action(cid, set_id, f"{n}_last_ms", "unixNow()")
+            await add_action(cid, set_id, f"{n}_last_dir", str(sign))
         await add_action(cid, "down", f"{n}_point_az",
                          f"{editing} ? $(custom:{n}_tgt) : $(custom:{n}_az)")
         await add_action(cid, "down", f"{n}_point_seq", f"$(custom:{n}_point_seq) + 1")

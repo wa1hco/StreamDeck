@@ -196,3 +196,22 @@ Also: `demo_paint_buttons.py` repaints **all four** strip regions, so run
 `wire_rotator_knobs.py` *after* it. The rotator sim now compares against
 Companion's live variable values each tick, so re-wiring or a Companion restart
 no longer leaves `*_moving` / `*_dir` stale.
+
+---
+
+## 13. Knob acceleration: use `unixNow()` (ms), not `time_unix`
+
+`$(internal:time_unix)` is 1 s resolution — useless for detent timing. Companion expressions
+have `unixNow()` (Unix **ms**), so no helper process is needed. Companion ignores the encoder's
+own velocity (bitfocus/companion #2511, #3179), and the community "wait + set step" workaround
+(steps 1/2/4/8/16 with Waits) is clumsy; instead each rotate action set stores the previous
+detent's `unixNow()` and direction in custom vars and derives the step from the interval
+(`wire_rotator_knobs.py`, `step_expr`).
+
+- Actions in one set run **in order**, so `step` (reads old `last_ms`) → `tgt` (reads new
+  `step`) → `last_ms`/`last_dir` (written last) is safe. Verified via HTTP rotate at 25–300 ms.
+- Interval measured at action execution, not USB event time: expect ~10 ms jitter (+ HTTP latency
+  when scripted: a nominal 25 ms test gap measures ~35–45 ms, which lands in the 10° tier, not 15°).
+- Multi-statement expressions (`dt = ...;` newline `...`) work in action value fields.
+- `scripts/test_knob_accel.py` drives `/api/location/1/3/<col>/rotate-left|right` and prints
+  tgt/step per detent (slow, brisk, fast, decay, pause reset, reversal, wrap).
