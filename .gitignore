@@ -11,3 +11,4 @@ vendor/
 
 # Companion exports may contain seat-specific paths — keep curated copies only
 companion-exports/*.local.json
+__pycache__/
