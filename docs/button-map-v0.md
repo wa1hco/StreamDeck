@@ -19,13 +19,37 @@ Each LCD key is a **logical verb** (or cycle). No COM ports in button settings.
 
 No CW mode button. KEY path is separate.
 
-## Touch strip
+## Knobs
 
-Idle status `mode | ant`. Brief toast after MODE/ANT cycle (~1.5 s).
+| Dial | Role | Rotate | Press |
+|------|------|--------|-------|
+| 0 (left) | **Upper Az** | Adjust `custom:upper_az_target` (wrap 0–359) | Point upper rotator to target |
+| 1 | **Lower Az** | Adjust `custom:lower_az_target` (wrap 0–359) | Point lower rotator to target |
+| 2 | (unassigned) | — | — |
+| 3 | (unassigned) | — | — |
 
-## Knobs (demo labels only)
+- Rotating only sets a target; nothing moves until press.
+- Step size: 1° per detent (coarse 10° step TBD).
+- Backend: WIMS rotator point with explicit rotator + az (API shape to confirm with WIMS).
+- **Interim backend (now):** `scripts/rotator_sim.py` on `http://127.0.0.1:8790` (6°/s). It pushes `upper_az/_moving/_dir` and `lower_*` into Companion custom vars and points when a dial press bumps `<rot>_point_seq` (with `<rot>_point_az`). Wiring: `scripts/wire_rotator_knobs.py`.
 
-VFO · PWR · AZ · VOL — rotary enabled; not wired to station yet.
+## Touch strip (per dial region)
+
+- Regions 0/1 idle: that rotator's **current** Az, e.g. `UPR 245`.
+- First knob turn seeds the target from current Az; the strip then shows the **new target** as the knob changes it (e.g. `UPR →270`).
+- Press points to the target; strip goes back to tracking current Az.
+- **Timeout:** if no press within ~5 s of the last turn, the target is dropped and the strip reverts to current Az.
+
+### Strip colors (regions 0/1)
+
+| State | Text | Background |
+|-------|------|------------|
+| Current Az, rotator stopped | white | black |
+| Current Az, rotator turning | white | dark green, with direction arrow (`◀`/`▶`) |
+| New target (knob being turned, not yet pressed) | amber | black |
+
+Colors are proposals; tune on hardware. Turning/stopped state comes from the rotator sim for now (WIMS API TBD).
+- A MODE/ANT cycle toast may take over the strip; Az display returns when the toast expires.
 
 ## Companion wiring (interim)
 

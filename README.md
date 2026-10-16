@@ -55,4 +55,5 @@ deck brand may change.
 - Companion **5.0.5** installed for user at `~/.local/share/companion`.
 - Headless admin UI verified at http://127.0.0.1:8000/ (when running).
 - Stream Deck+ demo painted: MODE/ANT cycles, strip toast, fixed non-wrap fonts.
+- Rotator dials wired (dial 1 = upper, dial 2 = lower) to an **interim rotator simulator** (`scripts/run-rotator-sim.sh`, :8790, 6°/s) instead of WIMS. Repaint order: `demo_paint_buttons.py`, then `wire_rotator_knobs.py`.
 - Seat I/O agent and panel runtime: design only ([docs/panel-runtime.md](docs/panel-runtime.md)). Not started.

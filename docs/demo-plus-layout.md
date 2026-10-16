@@ -29,7 +29,7 @@ Labels are short single-line words. Font sizing is documented in
 
 ## Knobs
 
-VFO · PWR · AZ · VOL (rotary actions enabled; no station wiring yet)
+Dial 0 = **Upper Az**, dial 1 = **Lower Az** (rotate sets target, press points). Dials 2–3 unassigned. Strip regions above dials 0/1 show Az except while a MODE/ANT toast holds the strip. See [button-map-v0.md](button-map-v0.md).
 
 ## Apply
 
