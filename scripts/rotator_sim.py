@@ -122,7 +122,7 @@ def bridge(base):
             method="POST")
         urllib.request.urlopen(req, timeout=2).read()
 
-    last_seq, pushed = {}, {}
+    last_seq = {}
     while True:
         try:
             for n in ROT:
@@ -139,11 +139,11 @@ def bridge(base):
                     v = view(n)
                 for k, val in ((f"{n}_az", v["az"]), (f"{n}_moving", int(v["moving"])),
                                (f"{n}_dir", v["direction"])):
-                    if pushed.get(k) != val:
+                    # compare with Companion's live value (not a local cache) so a
+                    # re-wire / variable reset / Companion restart is healed next tick
+                    if get(k) != str(val):
                         put(k, val)
-                        pushed[k] = val
         except Exception as e:  # Companion down/restarting
-            pushed.clear()
             last_seq.clear()
             print(f"bridge: {e}", flush=True)
             time.sleep(2)

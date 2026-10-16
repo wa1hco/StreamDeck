@@ -66,9 +66,11 @@ async def main():
         # --- strip region above ---
         sid = control_id_at(2, col)
         toast = "($(internal:time_unix) < $(custom:demo_toast_until))"
+        # NOTE: Companion's `+` is numeric-only ('a' + 'b' == NaN) -> build text with
+        # template strings. Arrows: ↻ CW, ↺ CCW (check they render in companion-sans).
         arrow = f"($(custom:{n}_dir) == 'CW' ? ' ↻' : $(custom:{n}_dir) == 'CCW' ? ' ↺' : '')"
-        text = (f"{toast} ? $(custom:demo_toast) : {editing} ? '{lbl} →' + $(custom:{n}_tgt)"
-                f" : '{lbl} ' + $(custom:{n}_az) + ($(custom:{n}_moving) == 1 ? {arrow} : '')")
+        text = (f"{toast} ? $(custom:demo_toast) : {editing} ? `{lbl} →${{$(custom:{n}_tgt)}}`"
+                f" : `{lbl} ${{$(custom:{n}_az)}}${{$(custom:{n}_moving) == 1 ? {arrow} : ''}}`")
         await opt(sid, "text0", "text", text, expr=True)
         await opt(sid, "text0", "fontsize", d.FONT_STRIP)
         await opt(sid, "text0", "fontsizeAllowShrink", True)

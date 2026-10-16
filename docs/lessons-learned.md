@@ -176,3 +176,23 @@ Admin UI: http://127.0.0.1:8000/
 
 When changing toast/cycle behaviour, update **both** the live Companion DB wiring
 and `scripts/demo_paint_buttons.py` so a re-paint does not regress lessons 4–5.
+
+---
+
+## 12. Companion expressions: `+` never joins strings
+
+`'UPR ' + $(custom:upper_az)` evaluates to **`NaN`** in Companion 5 (the `+`
+operator is numeric-only). The rotator strips showed no usable text on the deck
+(only background color changes) until the text was rebuilt with template
+strings: `` `UPR ${$(custom:upper_az)}` `` (or `concat()`). The same bug sat in
+the MODE/ANT `demo_status` actions. Numeric `+` (target step, `time_unix + 5`)
+is fine.
+
+Verify without the deck: `scratch/venv/bin/python scripts/preview_button.py ROW COL out.png`
+saves Companion's rendered PNG (trpc `preview.graphics.location`) — `NaN` in the
+image means a bad expression.
+
+Also: `demo_paint_buttons.py` repaints **all four** strip regions, so run
+`wire_rotator_knobs.py` *after* it. The rotator sim now compares against
+Companion's live variable values each tick, so re-wiring or a Companion restart
+no longer leaves `*_moving` / `*_dir` stale.

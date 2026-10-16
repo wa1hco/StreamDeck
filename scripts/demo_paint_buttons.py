@@ -271,7 +271,7 @@ async def main():
             mode_id,
             step_id,
             "demo_status",
-            f"'{mode_lbl} | ' + $(custom:demo_ant_lbl)",
+            "`" + mode_lbl + " | ${$(custom:demo_ant_lbl)}`",  # + never joins strings
             expr=True,
         )
 
@@ -304,7 +304,7 @@ async def main():
             ant_id,
             step_id,
             "demo_status",
-            f"$(custom:demo_mode_lbl) + ' | {ant_lbl}'",
+            "`${$(custom:demo_mode_lbl)} | " + ant_lbl + "`",  # + never joins strings
             expr=True,
         )
     print("Touch strip…")

@@ -45,11 +45,12 @@ No CW mode button. KEY path is separate.
 | State | Text | Background |
 |-------|------|------------|
 | Current Az, rotator stopped | white | black |
-| Current Az, rotator turning | white | dark green, with direction arrow (`◀`/`▶`) |
+| Current Az, rotator turning | white | dark green, with direction arrow (`↻` CW / `↺` CCW after the Az, e.g. `UPR 245 ↻`) |
 | New target (knob being turned, not yet pressed) | amber | black |
 
-Colors are proposals; tune on hardware. Turning/stopped state comes from the rotator sim for now (WIMS API TBD).
-- A MODE/ANT cycle toast may take over the strip; Az display returns when the toast expires.
+Editing text is `UPR →270`. Colors are proposals; tune on hardware. Turning/stopped state comes from the rotator sim for now (WIMS API TBD).
+- A MODE/ANT cycle toast takes over the strip (text = toast, white on `#111111`); Az display returns when the toast expires.
+- Strip text/colors are Companion **expressions**; build text with template strings (`` `UPR ${$(custom:upper_az)}` ``), never `+` (numeric only; `'a' + 'b'` is `NaN`). See lesson 12 in [lessons-learned.md](lessons-learned.md).
 
 ## Companion wiring (interim)
 
