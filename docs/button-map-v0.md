@@ -48,14 +48,23 @@ encoder's own velocity, so it is computed in expressions from `unixNow()` (ms).
 | < 70 ms | 10° |
 | < 35 ms | 15° |
 
-- **Attack is instant** (a fast interval jumps straight to its tier); **release decays**: when the
-  knob slows, step = max(new tier, previous step ÷ 2), so 10 → 5 → 2 → 1 over a few detents.
-- **Pause > 250 ms** or **direction reversal** → back to 1° on that detent.
-- Per-dial state vars: `<rot>_last_ms`, `<rot>_last_dir` (±1), `<rot>_step`. Action order in each
-  rotate set is fixed: `step` → `tgt` → `edit_until` → `last_ms` → `last_dir`.
+- **Attack is instant** (a fast interval jumps straight to its tier); **release decays**: while the
+  spin continues (interval < 200 ms) and slows, step = max(new tier, previous step ÷ 2), so
+  10 → 5 → 2 → 1 over a few detents.
+- **Grace memory (repeated flicks):** the first detent after a pause (200–800 ms) has no velocity
+  information, so it starts from the previous gesture's *peak* step, faded linearly to 0 at 800 ms,
+  ÷ 2 (e.g. peak 15 after a 400 ms pause → 3°; peak 10 → 2°; a pause > 800 ms → 1°). One-shot:
+  the first slow click consumes the memory, so later fine-adjust clicks are 1° again. The second
+  detent of a burst still jumps straight to its tier, so bursts 2, 3… ramp like burst 1 (±2°).
+  A pure deliberate click train (peak 1) is never boosted.
+- **Direction reversal** drops carried decay/grace memory but still applies the live velocity tier
+  (a fast reversal keeps its speed; a slow one is 1°). It no longer hard-resets to 1°.
+- Per-dial state vars: `<rot>_last_ms`, `<rot>_last_dir` (±1), `<rot>_step`, `<rot>_peak`. Action
+  order in each rotate set is fixed: `step` → `peak` → `tgt` → `edit_until` → `last_ms` → `last_dir`.
 - Tune the constants at the top of `scripts/wire_rotator_knobs.py` (`ACCEL_TIERS`, `STEP_SLOW`,
-  `IDLE_RESET_MS`, `DECAY_DIV`) and re-run it (after `demo_paint_buttons.py`). Test without the deck:
-  `python3 scripts/test_knob_accel.py [dial]`.
+  `DECAY_DIV`, `GRACE_MS`, `GRACE_DIV`) and re-run it (after `demo_paint_buttons.py`). Test without
+  the deck: `python3 tools/dev/test_knob_accel.py [dial]` (all scenarios) or
+  `python3 tools/dev/test_knob_accel.py [dial] bursts` (repeated-flick consistency).
 - Edit window (5 s), wrap and strip behavior are unchanged.
 
 ## Touch strip (per dial region)

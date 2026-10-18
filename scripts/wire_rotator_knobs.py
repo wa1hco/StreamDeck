@@ -26,9 +26,15 @@ ACCEL_TIERS = (
     (200, 2),   # < 200 ms        : a little quicker than deliberate
 )
 STEP_SLOW = 1        # deg/detent for deliberate turns (>= last tier threshold)
-IDLE_RESET_MS = 250  # pause longer than this => step snaps back to STEP_SLOW
-DECAY_DIV = 2        # when the knob slows, step falls to max(new tier, previous step // DECAY_DIV)
-# Direction reversal always resets the step to STEP_SLOW (libinput/mouse-style tracker reset).
+SLOW_MS = ACCEL_TIERS[-1][0]  # interval at/above this = a "pause" (new gesture), not mid-spin
+DECAY_DIV = 2        # mid-spin (< SLOW_MS) slow-down: step = max(tier, previous step // DECAY_DIV)
+# Grace memory: the FIRST detent after a pause (SLOW_MS..GRACE_MS) starts from the previous
+# gesture's peak step, faded linearly to 0 at GRACE_MS, divided by GRACE_DIV, so repeated flicks
+# start consistently instead of dropping to 1 deg. One-shot: a second slow click gets no boost.
+GRACE_MS = 800       # pause longer than this => memory expired, first detent = STEP_SLOW
+GRACE_DIV = 2        # first-detent step = peak * (1 - pause/GRACE_MS) // GRACE_DIV
+# Direction reversal drops carried memory (no decay/grace) but still applies the live velocity
+# tier, so a fast reversal keeps its speed and a slow one is 1 deg.
 ROTS = ((0, "upper", "UPR"), (1, "lower", "LWR"))
 AMBER, WHITE, BLACK, GREEN = 0xFFB000, 0xFFFFFF, 0x000000, 0x004400
 
@@ -57,18 +63,33 @@ async def opt(cid, el, key, value, expr=False):
         "controlId": cid, "elementId": el, "key": key, "value": ev(value, expr=expr)})
 
 
+def _dt_rev(n, sign):
+    return (f"dt = unixNow() - $(custom:{n}_last_ms);\n"
+            f"rev = $(custom:{n}_last_dir) != {sign};\n")
+
+
 def step_expr(n, sign):
     """Companion expression: new step (deg/detent) for this detent. Reads <n>_last_ms,
-    <n>_last_dir, <n>_step (all updated AFTER tgt by the later actions)."""
+    <n>_last_dir, <n>_step, <n>_peak (last_ms/last_dir are updated AFTER, by later actions)."""
     tier = str(STEP_SLOW)
     for ms, st in reversed(ACCEL_TIERS):
         tier = f"dt < {ms} ? {st} : {tier}"
     return (
-        f"dt = unixNow() - $(custom:{n}_last_ms);\n"
+        _dt_rev(n, sign) +
         f"tier = {tier};\n"
-        f"prev = $(custom:{n}_step);\n"
-        f"(dt > {IDLE_RESET_MS} || $(custom:{n}_last_dir) != {sign}) ? {STEP_SLOW}"
-        f" : max(tier, floor(prev / {DECAY_DIV}))"
+        f"fade = dt >= {GRACE_MS} ? 0 : ({GRACE_MS} - dt) / {GRACE_MS};\n"
+        f"carry = rev ? 0 : (dt < {SLOW_MS} ? floor($(custom:{n}_step) / {DECAY_DIV})"
+        f" : floor($(custom:{n}_peak) * fade / {GRACE_DIV}));\n"
+        f"max(tier, carry)"
+    )
+
+
+def peak_expr(n, sign):
+    """Peak step of the current gesture. Runs right after the step action. Held while the
+    spin continues; any pause (>= SLOW_MS) or reversal consumes it (peak := this step)."""
+    return (
+        _dt_rev(n, sign) +
+        f"(rev || dt >= {SLOW_MS}) ? $(custom:{n}_step) : max($(custom:{n}_step), $(custom:{n}_peak))"
     )
 
 
@@ -76,7 +97,7 @@ async def main():
     for _, n, _ in ROTS:
         for suf, dv in (("az", "0"), ("moving", "0"), ("dir", ""), ("tgt", "0"),
                         ("edit_until", "0"), ("last_ms", "0"), ("last_dir", "0"),
-                        ("step", str(STEP_SLOW)), ("point_az", "0"), ("point_seq", "0")):
+                        ("step", str(STEP_SLOW)), ("peak", str(STEP_SLOW)), ("point_az", "0"), ("point_seq", "0")):
             await var(f"{n}_{suf}", dv)
 
     for col, n, lbl in ROTS:
@@ -86,8 +107,9 @@ async def main():
         await mut("controls.setOptionsField", {"controlId": cid, "key": "rotaryActions", "value": True})
         await d.style_face(cid, text=f"{lbl} AZ", bgcolor=0x222222, fontsize=d.FONT_KNOB)
         for set_id, sign in (("rotate_left", -1), ("rotate_right", 1)):
-            # ORDER MATTERS (actions in a set run sequentially): step -> tgt -> bookkeeping.
+            # ORDER MATTERS (actions in a set run sequentially): step -> peak -> tgt -> bookkeeping.
             await add_action(cid, set_id, f"{n}_step", step_expr(n, sign))
+            await add_action(cid, set_id, f"{n}_peak", peak_expr(n, sign))
             # seed from current az when not editing; wrap 0-359; left = + (360 - step)
             adj = f"$(custom:{n}_step)" if sign > 0 else f"(360 - $(custom:{n}_step))"
             await add_action(cid, set_id, f"{n}_tgt",

@@ -213,5 +213,27 @@ detent's `unixNow()` and direction in custom vars and derives the step from the 
 - Interval measured at action execution, not USB event time: expect ~10 ms jitter (+ HTTP latency
   when scripted: a nominal 25 ms test gap measures ~35–45 ms, which lands in the 10° tier, not 15°).
 - Multi-statement expressions (`dt = ...;` newline `...`) work in action value fields.
-- `scripts/test_knob_accel.py` drives `/api/location/1/3/<col>/rotate-left|right` and prints
+- `tools/dev/test_knob_accel.py` drives `/api/location/1/3/<col>/rotate-left|right` and prints
   tgt/step per detent (slow, brisk, fast, decay, pause reset, reversal, wrap).
+
+### 13a. Repeated flicks: the first detent after a pause has no velocity (grace memory)
+
+Feel-test on the real deck: "turning fast repeatedly does not accelerate the same way at the
+first turn after a pause." Measured with `tools/dev/test_knob_accel.py <dial> bursts`
+(burst, 400 ms, burst, 1 s, burst, 400 ms, burst, 150 ms, burst):
+
+- Cause: a hard reset at 250 ms. A pause of 150–250 ms carried the old step (burst 5 started at
+  7°), a pause of 250 ms+ started at 1°. Two flicks 300–800 ms apart (the normal rhythm of
+  repeated flicks) therefore felt different from continuous spinning. The timing itself was
+  fine (`last_ms` is written after `step`, `unixNow()` is ms, `edit_until`/`time_unix` don't
+  interfere), and the second detent of a burst already jumped to its tier with no lag.
+- A detent's interval is only known once a *second* detent arrives, so the first one can't be
+  accelerated from its own velocity. Fix is memory, not lookahead: remember the gesture's peak
+  step (`<rot>_peak`) and start the first detent after a pause at `peak × fade ÷ 2`
+  (fade 1 → 0 over 200–800 ms). One-shot (a pause or reversal consumes the peak) so slowing
+  down to land on the target still gives 1° clicks; a pure 300 ms click train stays at 1°.
+- Direction reversal no longer hard-resets to 1°: it drops decay/grace memory but keeps the
+  live velocity tier (a bounce at the end of a flick isn't punished).
+- Honest limit: the effect is small (+1…+6° on one detent). Raising `GRACE_DIV` toward 1 makes
+  repeat flicks start hotter but also makes the first fine click after a flick jump.
+- Test helper convention: dev/test helpers live in `tools/dev/`, deck/runtime scripts in `scripts/`.
